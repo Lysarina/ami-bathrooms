@@ -6,9 +6,12 @@ from flask_mqtt import Mqtt
 #eventlet.monkey_patch()
 
 app = Flask(__name__)
-app.config['MQTT_BROKER_URL'] = 'localhost'
+# app.config['MQTT_BROKER_URL'] = 'localhost'
+app.config['MQTT_BROKER_URL'] = '165.232.73.30'
 app.config['MQTT_BROKER_PORT'] = 1883
 app.config['MQTT_REFRESH_TIME'] = 1.0
+app.config['MQTT_USERNAME'] = 'hallvard'
+app.config['MQTT_PASSWORD'] = 'MQTTPass3' 
 
 mqtt = Mqtt(app)
 #socketio = SocketIO(app)
@@ -37,7 +40,7 @@ def handle_mqtt_message(client, userdata, message):
         print(message.payload.decode())
     # return render_template('index.html', msg=data.payload)
     # emit a mqtt_message event to the socket containing the message data
-    #socketio.emit('mqtt_message', data=data)
+    #socketio.emit('mqtt_messageS', data=data)
 
 @app.route("/", methods = ['GET'])
 def index():
