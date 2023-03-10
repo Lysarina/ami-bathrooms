@@ -13,30 +13,40 @@ app.config['MQTT_REFRESH_TIME'] = 1.0
 mqtt = Mqtt(app)
 #socketio = SocketIO(app)
 
-bathrooms = ["", "", ""]
+NO_OF_BATHROOMS = 3
+bathrooms = [""] * NO_OF_BATHROOMS
 
 @mqtt.on_connect()
 def handle_connect(client, userdata, flags, rc):
     print("owo")
     mqtt.subscribe('sensors/motion')
+    mqtt.subscribe('notify')
 
 @mqtt.on_message()
 def handle_mqtt_message(client, userdata, message):
     global bathrooms
     #print(message.payload.decode())
-    data = dict(
-        topic=message.topic,
-        payload=message.payload.decode()
-    )
-    bathrooms[0] = "Bathroom " + message.payload.decode()
-    print(bathrooms)
+    # data = dict(
+    #     topic=message.topic,
+    #     payload=message.payload.decode()
+    # )
+    if (message.topic == "sensors/motion"):
+        bathrooms[0] = "Bathroom " + message.payload.decode()
+        print(bathrooms)
+    elif (message.topic == "notify"):
+        print(message.payload.decode())
     # return render_template('index.html', msg=data.payload)
     # emit a mqtt_message event to the socket containing the message data
     #socketio.emit('mqtt_message', data=data)
 
-@app.route("/")
-def hello_world():
-    #print(latest_msg)
+@app.route("/", methods = ['GET'])
+def index():
+    global bathrooms
+    return render_template('index.html', rooms = bathrooms)
+
+@app.route("/", methods = ['POST'])
+def notify():
+    mqtt.publish("notify", "on")
     return render_template('index.html', rooms = bathrooms)
 
 # @app.route("/data")
