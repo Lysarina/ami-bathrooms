@@ -1,0 +1,1 @@
+mosquitto_pub -d -t sensors/motion -u ella -P EllaPass3 -m "Hello World" -h 165.22.31.23
