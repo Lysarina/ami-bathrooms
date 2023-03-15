@@ -1,5 +1,6 @@
 var noOfBathrooms;
 var userID;
+var inQueue;
 
 function onConnect(){
     var topics = ["sensors/motion", "sensors/light", "sensors/temperature", "sensors/humidity", "queue"]
@@ -21,16 +22,22 @@ function onMessageArrived(message){
     const topic = message.destinationName;
     console.log("Received a message from " + topic + ": " + message.payloadString);
     const data = JSON.parse(message.payloadString);
+    // expected fields for sensor data: "sensor" (sensor type), "data" (sensor value), "bathroomID"
     
     if (topic === "queue") {
+        if (data.waiting === 0 && inQueue){
+        // only relevant to process queue message if user is in queue + bathroom becomes free
         // expects: user id, 0, bathroomID
-        if (data.userID === userID && data.waiting === 0){
-            alert("Bathroom " + data.bathroomID + " is now free!");
-            document.getElementById("notifyMsg").innerHTML = "";
-            document.getElementById("queueWarning").innerHTML = "";
-        } else if (data.userID !== userID && data.waiting === 0) {
-            document.getElementById("queueWarning").innerHTML = "There are still people before you in line.";
-        }
+            if (data.userID === userID) {
+                alert("Bathroom " + data.bathroomID + " is now free!");
+                document.getElementById("notifyMsg").innerHTML = "";
+                document.getElementById("queueWarning").innerHTML = "";
+                document.getElementById("alreadyInQueue").innerHTML = "";
+                inQueue = false;
+            } else {
+                document.getElementById("queueWarning").innerHTML = "There are still people before you in line, please wait.";
+            }
+        }  
     } else if (topic === "sensors/light") {
         var lights;
         if (data.data>0){
@@ -67,17 +74,23 @@ function startDisconnect(){
 }
 
 function publishQueueMessage(){
-    // publish json with  user ID and on message
-    msgJSON = "{"
-        + "\"userID\": \"" + userID + "\", "
-        + "\"waiting\": 1" +
-    "}";
-    topic = "queue";
-    Message = new Paho.MQTT.Message(msgJSON);
-    Message.destinationName = topic;
-    client.send(Message);
-    console.log("Message to topic "+topic+" is sent")
-    document.getElementById("notifyMsg").innerHTML = "You will be notified when a bathroom is available. Do not refresh the page!";
+    if (!inQueue) {
+        // publish json with  user ID and on message
+        msgJSON = "{" +
+            "\"userID\": \"" + userID + "\", " +
+            "\"waiting\": 1," +
+            "\"bathroomID\": 0" +
+        "}";
+        topic = "queue";
+        Message = new Paho.MQTT.Message(msgJSON);
+        Message.destinationName = topic;
+        client.send(Message);
+        console.log("Message to topic "+topic+" is sent");
+        inQueue = true;
+        document.getElementById("notifyMsg").innerHTML = "You will be notified when a bathroom is available. Do not refresh the page!";
+    } else {
+        document.getElementById("alreadyInQueue").innerHTML = "You are already in the queue. Please wait.";
+    }
 }
 
 function startConnect(){
@@ -99,7 +112,7 @@ function startConnect(){
 // function readTextFile(file)
 // {
 //     const fr = new FileReader();
-//     fr.onload = () => {
+//     fr.onload = () => {True
 //         const bathrooms = fr.result.split(/\r?\n/);
 //         console.log(bathrooms);
 //     };
@@ -110,6 +123,7 @@ window.onload = function () {
     // generate random user ID
     userID = "user" + Math.floor(Math.random() * 500);
     console.log("UserID " + userID);
+    inQueue = false;
 
     startConnect();
     // readTextFile("/bathrooms.txt");
