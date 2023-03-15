@@ -12,20 +12,24 @@
            <!-- <input type="button" onclick="startConnect()"  value="Connect"> -->
            <!-- <input type="button" onclick="publishNotifyMessage()"  value="Notify"> -->
            <!-- <button class="button-17" role="button" onclick="publishNotifyMessage()">Notify</button> -->
-           <button class="button-34" role="button" onclick="publishNotifyMessage()">Notify</button>
-           <span id="notifymsg"></span>
+           <button class="button-34" role="button" onclick="publishQueueMessage()">Queue</button>
+           <span id="notifyMsg"></span>
+           <p id="queueWarning"></p>
+           <p></p>
            <table id="bathrooms">
                 <thead>
                     <th>Bathroom</th>
                     <th>Occupied?</th>
                     <th>Temperature</th>
                     <th>Humidity</th>
+                    <th>Lights</th>
                 </thead>
 
            </table>
            <!-- <div id="messages">
                <span id="bathroom1">Bathroom 1: </span><br>
            </div> -->
+           <p id="connectionWarning" style="color:red;"></p>
         </div>
     </body>
 </html>

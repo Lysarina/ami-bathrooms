@@ -1,1 +1,1 @@
-mosquitto_pub -d -t sensors/motion -u ella -P EllaPass3 -m "Hello World" -h 165.22.31.23
+mosquitto_pub -d -t queue -u ella -P EllaPass3 -m "{\"userID\": \"user45\", \"waiting\":0, \"bathroomID\": 1}" -h 165.22.31.23
