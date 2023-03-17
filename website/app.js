@@ -1,9 +1,15 @@
+const host = "165.22.31.23";   
+const port = "8080";
+const userId  = "ella";  
+const passwordId = "EllaPass3";
+
 var noOfBathrooms;
 var userID;
 var inQueue;
+var queueSize;
 
 function onConnect(){
-    var topics = ["sensors/motion", "sensors/light", "sensors/temperature", "sensors/humidity", "queue"]
+    var topics = ["occupancy", "sensors/light", "sensors/temperature", "sensors/humidity", "queue"]
     for (let i = 0; i < topics.length; i++){
         client.subscribe(topics[i])
         console.log("Subscribed to topic " + topics[i])
@@ -19,53 +25,59 @@ function onConnectionLost(responseObject){
 }
 
 function onMessageArrived(message){
-    const topic = message.destinationName;
-    console.log("Received a message from " + topic + ": " + message.payloadString);
-    const data = JSON.parse(message.payloadString);
-    // expected fields for sensor data: "sensor" (sensor type), "data" (sensor value), "bathroomID"
-    
-    if (topic === "queue") {
-        if (data.waiting === 0 && inQueue){
-        // only relevant to process queue message if user is in queue + bathroom becomes free
-        // expects: user id, 0, bathroomID
-            if (data.userID === userID) {
-                alert("Bathroom " + data.bathroomID + " is now free!");
-                document.getElementById("notifyMsg").innerHTML = "";
-                document.getElementById("queueWarning").innerHTML = "";
-                document.getElementById("alreadyInQueue").innerHTML = "";
-                inQueue = false;
+    try {
+        const topic = message.destinationName;
+        console.log("Received a message from " + topic + ": " + message.payloadString);
+        const data = JSON.parse(message.payloadString);
+        
+        if (topic === "queue") {
+            if (inQueue && data.waiting == 0) {
+                if (data.userID === userID) {
+                    alert("Bathroom " + data.bathroomID + " is now free!");
+                    document.getElementById("notifyMsg").innerHTML = "";
+                    document.getElementById("queueWarning").innerHTML = "";
+                    document.getElementById("alreadyInQueue").innerHTML = "";
+                    inQueue = false;
+                } else {
+                    document.getElementById("queueWarning").innerHTML = "There are still people before you in the queue."
+                }
+            } else if (data.waiting == 0) {
+                console.log("Queue size " + data.queueSize);
+                queueSize = data.queueSize;
+                if (data.queueSize > 0) {
+                    document.getElementById("queueWarning").innerHTML = "There are " + queueSize + " people in queue.";
+                } else {
+                    document.getElementById("queueWarning").innerHTML = "";
+                }
             } else {
-                document.getElementById("queueWarning").innerHTML = "There are still people before you in line, please wait.";
+                if (queueSize == 0){
+                    document.getElementById("queueWarning").innerHTML = "There are people in queue.";
+                } else {
+                    document.getElementById("queueWarning").innerHTML = "There are " + queueSize + " people in queue.";
+                }
             }
-        }  
-    } else if (topic === "sensors/light") {
-        var lights;
-        if (data.data>0){
-            lights = "On"
+        } else if (topic === "occupancy") {
+            if (data.occupancy == 1){
+                document.getElementById("occupancy" + data.bathroomID).innerHTML = "Occupied";
+                document.getElementById("occupancy" + data.bathroomID).style.color = "red";
+            } else {
+                document.getElementById("occupancy" + data.bathroomID).innerHTML = "Free";
+                document.getElementById("occupancy" + data.bathroomID).style.color = "green";
+            }
+        } else if (topic === "sensors/light") {
+            var lights;
+            if (data.data>700){
+                lights = "On"
+            } else {
+                lights = "Off"
+            }
+            document.getElementById(data.sensor + data.bathroomID).innerHTML = lights;
         } else {
-            lights = "Off"
+            document.getElementById(data.sensor + data.bathroomID).innerHTML = data.data;
         }
-        document.getElementById(data.sensor + data.bathroomID).innerHTML = lights;
-    } else {
-        document.getElementById(data.sensor + data.bathroomID).innerHTML = data.data;
+    } catch (error) {
+        console.log("Error receiving message: " + error);
     }
-    
-    // if (topic === "sensors/motion") {
-    //     // expects: bathroom id, motion
-    //     document.getElementById(data.sensor + data.bathroomID).innerHTML = data.data;
-    // } else if (topic === "sensors/temperature") {
-    //     // expects: bathroom id, temp
-    //     document.getElementById("temp" + data.bathroomID).innerHTML = data.data;
-    // } else if (topic === "sensors/humidity") {
-    //     // expects: bathroom id, humidity
-    //     document.getElementById("humidity" + data.bathroomID).innerHTML = data.data;
-    // } else if (topic === "notify") {
-    //     // expects: user id, notify off
-    //     // maybe: bathroom that is free?
-    //     if (message.payloadString === "off") {
-    //         alert("Free bathroom!")
-    //     }
-    // }
 }
 
 function startDisconnect(){
@@ -75,11 +87,12 @@ function startDisconnect(){
 
 function publishQueueMessage(){
     if (!inQueue) {
-        // publish json with  user ID and on message
+        // publish json with user ID and on message
         msgJSON = "{" +
             "\"userID\": \"" + userID + "\", " +
             "\"waiting\": 1," +
-            "\"bathroomID\": 0" +
+            "\"bathroomID\": 0," +
+            "\"queueSize\": 0" +
         "}";
         topic = "queue";
         Message = new Paho.MQTT.Message(msgJSON);
@@ -93,11 +106,7 @@ function publishQueueMessage(){
     }
 }
 
-function startConnect(){
-    host = "165.22.31.23";   
-    port = "8080";
-    userId  = "ella";  
-    passwordId = "EllaPass3";  
+function startConnect(){  
     console.log("Connecting to " + host + " on port " +port);
     client = new Paho.MQTT.Client(host, Number(port), userID);
     client.onConnectionLost = onConnectionLost;
@@ -109,31 +118,21 @@ function startConnect(){
     });
 }
 
-// function readTextFile(file)
-// {
-//     const fr = new FileReader();
-//     fr.onload = () => {True
-//         const bathrooms = fr.result.split(/\r?\n/);
-//         console.log(bathrooms);
-//     };
-//     fr.readAsText(this.files[0]);
-// }
-
 window.onload = function () {
     // generate random user ID
     userID = "user" + Math.floor(Math.random() * 500);
     console.log("UserID " + userID);
     inQueue = false;
+    queueSize = 0;
 
     startConnect();
-    // readTextFile("/bathrooms.txt");
     noOfBathrooms = 2;
     for (let i = 1; i <= noOfBathrooms; i++){
         document.getElementById("bathrooms").innerHTML += "<tr><td>Bathroom " + i + "</td>" + 
-            "<td id=\"motion" + i + "\">Occupied?</td>" + 
-            "<td id=\"temperature" + i + "\">Temperature</td>" + 
-            "<td id=\"humidity" + i + "\">Humidity</td>" + 
-            "<td id=\"light" + i + "\">Lights</td>" +
+            "<td id=\"occupancy" + i + "\">No value</td>" + 
+            "<td id=\"temperature" + i + "\">No value</td>" + 
+            "<td id=\"humidity" + i + "\">No value</td>" + 
+            "<td id=\"light" + i + "\">No value</td>" +
             "</tr>"
     }
 }
