@@ -1,0 +1,11 @@
+[Unit]
+Description=Python server for website
+After=multi-user.target
+
+[Service]
+Type=simple
+Restart=always
+ExecStart=/usr/bin/python3 /root/website/server.py
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,11 @@
+[Unit]
+Description=Mediator for website
+After=multi-user.target
+
+[Service]
+Type=simple
+Restart=always
+ExecStart=/usr/bin/python3 /root/website/mediator.py
+
+[Install]
+WantedBy=multi-user.target
