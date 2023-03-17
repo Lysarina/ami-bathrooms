@@ -7,10 +7,10 @@ BROKER_URL = "165.22.31.23"
 USERNAME = "hallvard"
 PASSWORD = "HallvardPass3"
 BROKER_PORT = 1883
-TOPICS = ["occupancy", "sensors/light", "sensors/temperature", "sensors/humidity", "queue"]
+TOPICS = ["occupancy", "sensors/light", "sensors/temperature", "sensors/humidity", "queue", "getLatest"]
 
 queue = []
-latest_data = {}
+latest_data = {"out": 0, "queueSize": 0}
 
 def on_connect(client, userdata, flags, rc):
     print("Connected with result code "+str(rc))
@@ -20,14 +20,14 @@ def on_connect(client, userdata, flags, rc):
 def on_message(client, userdata, msg):
     print(f"New message on: {msg.topic}, msg.payload: {msg.payload}")
     data = json.loads(msg.payload)
-
-    if msg.topic == "queue":
-        if data["waiting"] == 1:
-            queue.append(data["userID"])
-            client.publish("queue/size", len(queue))
-            print("Added " + data["userID"] + " to queue, queue length is now " + str(len(queue)))
+    if msg.topic == "getLatest":
+        if data["out"] == 1:
+            # if msg comes from a user (out = 1), send saved data 
+            print(json.dumps(latest_data))
+            client.publish("getLatest", json.dumps(latest_data))
     else:
         id = data["bathroomID"]
+
         if id not in latest_data.keys():
             latest_data[id] = {
                 "occupancy": "No value",
@@ -35,21 +35,38 @@ def on_message(client, userdata, msg):
                 "temperature": "No value",
                 "humidity": "No value"
             }
-        if msg.topic == "occupancy":
-            latest_data[id]["occupancy"] = data["occupancy"]
-            print("Bathroom " + str(id) + ": " + str(data["occupancy"]))
-            if data["occupancy"] == 0 and len(queue) > 0:
-                userID = queue.pop(0)
-                json_dict = {
-                    "bathroomID": data["bathroomID"],
-                    "userID": userID,
-                    "waiting": 0,
-                    "queueSize": len(queue)
-                }
-                client.publish("queue", json.dumps(json_dict))
+        if msg.topic == "queue":
+            if data["waiting"] == 1:
+                # someone wants to be in queue
+                queue.append(data["userID"])
                 client.publish("queue/size", len(queue))
+                latest_data["queueSize"] = len(queue)
+                print("Added " + data["userID"] + " to queue, queue length is now " + str(len(queue)))  
+            elif data["waiting"] == 2:
+                # someone wants to be removed from queue
+                queue.remove(data["userID"])
+                client.publish("queue/size", len(queue))
+                latest_data["queueSize"] = len(queue)
+                print("Removed " + data["userID"] + " from queue, queue length is now " + str(len(queue)))        
         else:
-            latest_data[id][data["sensor"]] = data["data"]     
+            if msg.topic == "occupancy":
+                latest_data[id]["occupancy"] = data["occupancy"]
+                if data["occupancy"] == 0 and len(queue) > 0:
+                    # bathroom is free and people in queue; send notif to first in queue
+                    userID = queue.pop(0)
+                    json_dict = {
+                        "bathroomID": data["bathroomID"],
+                        "userID": userID,
+                        "waiting": 0,
+                        "queueSize": len(queue)
+                    }
+                    client.publish("queue", json.dumps(json_dict))
+                    client.publish("queue/size", len(queue))
+                    latest_data["queueSize"] = len(queue)
+                    print("Bathroom " + str(id) + " is now free; sent notification to user " + userID)
+            else:
+                # save sensor data to latest data
+                latest_data[id][data["sensor"]] = data["data"]     
 
 
 def init():

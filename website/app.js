@@ -3,17 +3,25 @@ const port = "8080";
 const userId  = "ella";  
 const passwordId = "EllaPass3";
 
-var noOfBathrooms;
+const noOfBathrooms = 2;
+
 var userID;
 var inQueue;
 var queueSize;
 
 function onConnect(){
+    // subscribe to topics
     var topics = ["occupancy", "sensors/light", "sensors/temperature", "sensors/humidity", "queue"]
     for (let i = 0; i < topics.length; i++){
         client.subscribe(topics[i])
         console.log("Subscribed to topic " + topics[i])
     }
+
+    // call for latest data; out: 1 signifies this comes from user
+    client.subscribe("getLatest")
+    msg = new Paho.MQTT.Message("{\"out\": 1}");
+    msg.destinationName = "getLatest";
+    client.send(msg)
 }
 
 function onConnectionLost(responseObject){
@@ -31,53 +39,106 @@ function onMessageArrived(message){
         const data = JSON.parse(message.payloadString);
         
         if (topic === "queue") {
-            if (inQueue && data.waiting == 0) {
-                if (data.userID === userID) {
-                    alert("Bathroom " + data.bathroomID + " is now free!");
-                    document.getElementById("notifyMsg").innerHTML = "";
-                    document.getElementById("queueWarning").innerHTML = "";
-                    document.getElementById("alreadyInQueue").innerHTML = "";
-                    inQueue = false;
+            // queue handling
+            if (inQueue) {
+                if (data.waiting == 0){
+                    // if a bathroom has become free
+                    queueSize = data.queueSize;
+                    if (data.userID === userID) {
+                        alert("Bathroom " + data.bathroomID + " is now free!");
+                        document.getElementById("notifyMsg").innerHTML = "";
+                        document.getElementById("queueWarning").innerHTML = "";
+                        document.getElementById("alreadyInQueue").innerHTML = "";
+                        document.getElementById("cancelBtn").style.display = "none";
+                        inQueue = false;
+                    } else {
+                        document.getElementById("queueWarning").innerHTML = "There are people before you in the queue."
+                    }
+                } else if (data.waiting == 1){
+                    // if someone added themselves to queue
+                    queueSize += 1;
                 } else {
-                    document.getElementById("queueWarning").innerHTML = "There are still people before you in the queue."
+                    // if someone cancelled their queue spot
+                    queueSize -= 1;
                 }
             } else if (data.waiting == 0) {
-                console.log("Queue size " + data.queueSize);
+                // if a bathroom has become free
                 queueSize = data.queueSize;
                 if (data.queueSize > 0) {
                     document.getElementById("queueWarning").innerHTML = "There are " + queueSize + " people in queue.";
                 } else {
                     document.getElementById("queueWarning").innerHTML = "";
                 }
+            } else if (data.waiting == 1) {
+                // if someone added themselves to queue
+                queueSize += 1;
+                document.getElementById("queueWarning").innerHTML = "There are " + queueSize + " people in queue.";
             } else {
-                if (queueSize == 0){
-                    document.getElementById("queueWarning").innerHTML = "There are people in queue.";
-                } else {
+                // if someone cancelled their queue spot
+                queueSize -= 1;
+                if (queueSize > 0) {
                     document.getElementById("queueWarning").innerHTML = "There are " + queueSize + " people in queue.";
-                }
+                } else {
+                    document.getElementById("queueWarning").innerHTML = "";
+                }                
             }
         } else if (topic === "occupancy") {
-            if (data.occupancy == 1){
-                document.getElementById("occupancy" + data.bathroomID).innerHTML = "Occupied";
-                document.getElementById("occupancy" + data.bathroomID).style.color = "red";
-            } else {
-                document.getElementById("occupancy" + data.bathroomID).innerHTML = "Free";
-                document.getElementById("occupancy" + data.bathroomID).style.color = "green";
-            }
+            processMotion(data.occupancy, data.bathroomID);
         } else if (topic === "sensors/light") {
-            var lights;
-            if (data.data>700){
-                lights = "On"
-            } else {
-                lights = "Off"
-            }
-            document.getElementById(data.sensor + data.bathroomID).innerHTML = lights;
+            processLight(data.data, data.bathroomID);
+        } else if (topic === "getLatest") {
+            if (data.out == 0) {
+                // out = 0 means this comes from mediator
+                queueSize = data.queueSize;
+                if (data.queueSize > 0) document.getElementById("queueWarning").innerHTML = "There are " + queueSize + " people in queue.";
+                for (let i = 1; i <= noOfBathrooms; i++){
+                    var bathroom = data[i.toString()]
+                    for (var sensor in bathroom) {
+                        if (sensor === "occupancy") {
+                            processMotion(bathroom[sensor], i);
+                        } else if (sensor === "light") {
+                            processLight(bathroom[sensor], i);
+                        } else {
+                            var sign = "";
+                            if (sensor === "temperature") sign = " &#8451;";
+                            else if (sensor === "humidity") sign = "%";
+                            document.getElementById(sensor + i).innerHTML = Math.round(bathroom[sensor]) + sign;
+                        }
+                    }
+                }
+                // after initial data has been received, we get info in real time
+                client.unsubscribe("getLatest")
+            }             
         } else {
-            document.getElementById(data.sensor + data.bathroomID).innerHTML = data.data;
+            // temperature or humidity data
+            var sign = "";
+            if (data.sensor === "temperature") sign = " &#8451;";
+            else if (data.sensor === "humidity") sign = "%";
+            document.getElementById(data.sensor + data.bathroomID).innerHTML = Math.round(data.data) + sign;
         }
     } catch (error) {
         console.log("Error receiving message: " + error);
     }
+}
+
+function processMotion(motion, bID) {
+    if (motion == 1){
+        document.getElementById("occupancy" + bID).innerHTML = "Occupied";
+        document.getElementById("occupancy" + bID).style.color = "red";
+    } else {
+        document.getElementById("occupancy" + bID).innerHTML = "Free";
+        document.getElementById("occupancy" + bID).style.color = "green";
+    }
+}
+
+function processLight(light, bID) {
+    var lights;
+    if (light>700){
+        lights = "On"
+    } else {
+        lights = "Off"
+    }
+    document.getElementById("light" + bID).innerHTML = lights;
 }
 
 function startDisconnect(){
@@ -85,9 +146,9 @@ function startDisconnect(){
     console.log("Disconnected from broker");
 }
 
-function publishQueueMessage(){
+function publishQueueMessage() {
     if (!inQueue) {
-        // publish json with user ID and on message
+        // publish json with user ID and waiting 1 (add user to queue)
         msgJSON = "{" +
             "\"userID\": \"" + userID + "\", " +
             "\"waiting\": 1," +
@@ -95,14 +156,40 @@ function publishQueueMessage(){
             "\"queueSize\": 0" +
         "}";
         topic = "queue";
-        Message = new Paho.MQTT.Message(msgJSON);
-        Message.destinationName = topic;
-        client.send(Message);
+        msg = new Paho.MQTT.Message(msgJSON);
+        msg.destinationName = topic;
+        client.send(msg);
         console.log("Message to topic "+topic+" is sent");
+
         inQueue = true;
+        document.getElementById("cancelBtn").style.display = "inline";
         document.getElementById("notifyMsg").innerHTML = "You will be notified when a bathroom is available. Do not refresh the page!";
+        if (queueSize > 0) document.getElementById("queueWarning").innerHTML = "There are people before you in the queue.";
     } else {
         document.getElementById("alreadyInQueue").innerHTML = "You are already in the queue. Please wait.";
+    }
+}
+
+function publishCancelMessage() {
+    if (inQueue) { 
+        // publish json with user ID and waiting 2 (remove user from queue)
+        msgJSON = "{" +
+            "\"userID\": \"" + userID + "\", " +
+            "\"waiting\": 2," +
+            "\"bathroomID\": 0," +
+            "\"queueSize\": 0" +
+        "}";
+        topic = "queue";
+        msg = new Paho.MQTT.Message(msgJSON);
+        msg.destinationName = topic;
+        client.send(msg);
+        console.log("Message to topic " + topic + " is sent");
+        
+        document.getElementById("cancelBtn").style.display = "none";
+        document.getElementById("notifyMsg").innerHTML = "";
+        document.getElementById("queueWarning").innerHTML = "";
+        document.getElementById("alreadyInQueue").innerHTML = "";
+        inQueue = false;
     }
 }
 
@@ -126,7 +213,7 @@ window.onload = function () {
     queueSize = 0;
 
     startConnect();
-    noOfBathrooms = 2;
+    // init table with amount of bathrooms
     for (let i = 1; i <= noOfBathrooms; i++){
         document.getElementById("bathrooms").innerHTML += "<tr><td>Bathroom " + i + "</td>" + 
             "<td id=\"occupancy" + i + "\">No value</td>" + 
