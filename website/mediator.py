@@ -7,7 +7,7 @@ BROKER_URL = "165.22.31.23"
 USERNAME = "hallvard"
 PASSWORD = "HallvardPass3"
 BROKER_PORT = 1883
-TOPICS = ["occupancy", "sensors/light", "sensors/temperature", "sensors/humidity", "queue", "getLatest"]
+TOPICS = ["occupancy", "sensors/light", "sensors/temperature", "sensors/humidity", "queue", "getLatest", "queue/cancel"]
 
 queue = []
 latest_data = {"out": 0, "queueSize": 0}
@@ -25,6 +25,9 @@ def on_message(client, userdata, msg):
             # if msg comes from a user (out = 1), send saved data 
             print(json.dumps(latest_data))
             client.publish("getLatest", json.dumps(latest_data))
+    elif msg.topic == "queue/cancel":
+        queue = []
+        client.publish("queue/size", 0)
     else:
         id = data["bathroomID"]
 

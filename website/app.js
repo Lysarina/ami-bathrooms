@@ -67,7 +67,9 @@ function onMessageArrived(message){
             } else if (data.waiting == 0) {
                 // if a bathroom has become free
                 queueSize = data.queueSize;
-                if (data.queueSize > 0) {
+                if (queueSize == 1) {
+                    document.getElementById("queueWarning").innerHTML = "There is 1 person in queue.";
+                } else if (data.queueSize > 1) {
                     document.getElementById("queueWarning").innerHTML = "There are " + queueSize + " people in queue.";
                 } else {
                     document.getElementById("queueWarning").innerHTML = "";
@@ -75,12 +77,18 @@ function onMessageArrived(message){
             } else if (data.waiting == 1) {
                 // if someone added themselves to queue
                 queueSize += 1;
-                document.getElementById("queueWarning").innerHTML = "There are " + queueSize + " people in queue.";
+                if (queueSize == 1){
+                    document.getElementById("queueWarning").innerHTML = "There is 1 person in queue.";
+                } else {
+                    document.getElementById("queueWarning").innerHTML = "There are " + queueSize + " people in queue.";
+                }
             } else {
                 // if someone cancelled their queue spot
                 queueSize -= 1;
-                if (queueSize > 0) {
+                if (queueSize > 1) {
                     document.getElementById("queueWarning").innerHTML = "There are " + queueSize + " people in queue.";
+                } else if (queueSize == 1) {
+                    document.getElementById("queueWarning").innerHTML = "There is 1 person in queue.";
                 } else {
                     document.getElementById("queueWarning").innerHTML = "";
                 }                
@@ -129,7 +137,7 @@ function processMotion(motion, bID) {
         document.getElementById("occupancy" + bID).innerHTML = "Occupied";
         document.getElementById("occupancy" + bID).style.color = "red";
         if (freeBathrooms.includes("Bathroom " + bID)) {
-            freeBathrooms.splice(indexOf("Bathroom " + bID), 1);
+            freeBathrooms.splice(freeBathrooms.indexOf("Bathroom " + bID), 1);
         }
     } else {
         document.getElementById("occupancy" + bID).innerHTML = "Free";
@@ -236,8 +244,9 @@ window.onload = function () {
     }
 }
 
-window.onunload = function () {
+window.onbeforeunload = function () {
     if (inQueue){
+        // if in queue, send cancel message when refreshing/closing the tab
         msgJSON = "{" +
             "\"userID\": \"" + userID + "\", " +
             "\"waiting\": 2," +
@@ -250,6 +259,8 @@ window.onunload = function () {
         client.send(msg);
         console.log("Message to topic " + topic + " is sent");
     }
- }
+}
 
- // send cancel queue AFTER page refresh
+
+
+  
