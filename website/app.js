@@ -9,7 +9,10 @@ var userID;
 var inQueue;
 var queueSize;
 
+var freeBathrooms;
+
 function onConnect(){
+    document.getElementById("connectionWarning").innerHTML = "";
     // subscribe to topics
     var topics = ["occupancy", "sensors/light", "sensors/temperature", "sensors/humidity", "queue"]
     for (let i = 0; i < topics.length; i++){
@@ -125,9 +128,15 @@ function processMotion(motion, bID) {
     if (motion == 1){
         document.getElementById("occupancy" + bID).innerHTML = "Occupied";
         document.getElementById("occupancy" + bID).style.color = "red";
+        if (freeBathrooms.includes("Bathroom " + bID)) {
+            freeBathrooms.splice(indexOf("Bathroom " + bID), 1);
+        }
     } else {
         document.getElementById("occupancy" + bID).innerHTML = "Free";
         document.getElementById("occupancy" + bID).style.color = "green";
+        if (!freeBathrooms.includes("Bathroom " + bID)) {
+            freeBathrooms.push("Bathroom " + bID);
+        }
     }
 }
 
@@ -147,7 +156,7 @@ function startDisconnect(){
 }
 
 function publishQueueMessage() {
-    if (!inQueue) {
+    if (!inQueue && freeBathrooms.length == 0) {
         // publish json with user ID and waiting 1 (add user to queue)
         msgJSON = "{" +
             "\"userID\": \"" + userID + "\", " +
@@ -165,6 +174,8 @@ function publishQueueMessage() {
         document.getElementById("cancelBtn").style.display = "inline";
         document.getElementById("notifyMsg").innerHTML = "You will be notified when a bathroom is available. Do not refresh the page!";
         if (queueSize > 0) document.getElementById("queueWarning").innerHTML = "There are people before you in the queue.";
+    } else if (!inQueue && freeBathrooms.length > 0) {
+        alert("There are free bathrooms: " + freeBathrooms.toString());
     } else {
         document.getElementById("alreadyInQueue").innerHTML = "You are already in the queue. Please wait.";
     }
@@ -211,6 +222,7 @@ window.onload = function () {
     console.log("UserID " + userID);
     inQueue = false;
     queueSize = 0;
+    freeBathrooms = [];
 
     startConnect();
     // init table with amount of bathrooms
@@ -223,3 +235,21 @@ window.onload = function () {
             "</tr>"
     }
 }
+
+window.onunload = function () {
+    if (inQueue){
+        msgJSON = "{" +
+            "\"userID\": \"" + userID + "\", " +
+            "\"waiting\": 2," +
+            "\"bathroomID\": 0," +
+            "\"queueSize\": 0" +
+        "}";
+        topic = "queue";
+        msg = new Paho.MQTT.Message(msgJSON);
+        msg.destinationName = topic;
+        client.send(msg);
+        console.log("Message to topic " + topic + " is sent");
+    }
+ }
+
+ // send cancel queue AFTER page refresh
