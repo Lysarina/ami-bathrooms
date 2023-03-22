@@ -1,13 +1,15 @@
 import paho.mqtt.client as mqtt
 import json
 
+# Class to handle the queue, as well as save latest sensor data to send to newly opened clients
+
 CLIENT_NAME = "mediator"
-#BROKER_URL = "localhost"
 BROKER_URL = "165.22.31.23"
 USERNAME = "hallvard"
 PASSWORD = "HallvardPass3"
 BROKER_PORT = 1883
-TOPICS = ["occupancy", "sensors/light", "sensors/temperature", "sensors/humidity", "queue", "getLatest", "queue/cancel"]
+TOPICS = ["occupancy", "sensors/light", "sensors/temperature", "sensors/humidity", "queue", "getLatest"]
+# also publishes to queue/size, queue/update
 
 queue = []
 latest_data = {"out": 0, "queueSize": 0}
@@ -25,9 +27,6 @@ def on_message(client, userdata, msg):
             # if msg comes from a user (out = 1), send saved data 
             print(json.dumps(latest_data))
             client.publish("getLatest", json.dumps(latest_data))
-    elif msg.topic == "queue/cancel":
-        queue = []
-        client.publish("queue/size", 0)
     else:
         id = data["bathroomID"]
 
@@ -50,7 +49,8 @@ def on_message(client, userdata, msg):
                 queue.remove(data["userID"])
                 client.publish("queue/size", len(queue))
                 latest_data["queueSize"] = len(queue)
-                print("Removed " + data["userID"] + " from queue, queue length is now " + str(len(queue)))        
+                print("Removed " + data["userID"] + " from queue, queue length is now " + str(len(queue)))
+            client.publish("queue/update", json.dumps(queue))        
         else:
             if msg.topic == "occupancy":
                 latest_data[id]["occupancy"] = data["occupancy"]
@@ -60,11 +60,11 @@ def on_message(client, userdata, msg):
                     json_dict = {
                         "bathroomID": data["bathroomID"],
                         "userID": userID,
-                        "waiting": 0,
-                        "queueSize": len(queue)
+                        "waiting": 0
                     }
                     client.publish("queue", json.dumps(json_dict))
                     client.publish("queue/size", len(queue))
+                    client.publish("queue/update", json.dumps(queue))
                     latest_data["queueSize"] = len(queue)
                     print("Bathroom " + str(id) + " is now free; sent notification to user " + userID)
             else:
