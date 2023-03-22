@@ -144,7 +144,7 @@ function startDisconnect(){
 }
 
 function publishQueueMessage() {
-    if (!inQueue && freeBathrooms.length == 0) {
+    if (!inQueue && (freeBathrooms.length == 0 || queueSize > 0)) {
         // publish json with user ID and waiting 1 (add user to queue)
         msgJSON = "{" +
             "\"userID\": \"" + userID + "\", " +
@@ -162,7 +162,7 @@ function publishQueueMessage() {
         document.getElementById("notifyMsg").innerHTML = "You will be notified when a bathroom is available. Do not refresh the page!";
         if (queueSize > 0) document.getElementById("queueWarning").innerHTML = "There are people before you in the queue.";
     } else if (!inQueue && freeBathrooms.length > 0) {
-        // if there are free bathrooms, direct user there
+        // if there are free bathrooms, direct user
         alert("There are free bathrooms: " + freeBathrooms.toString());
     } else {
         document.getElementById("alreadyInQueue").innerHTML = "You are already in the queue. Please wait.";
