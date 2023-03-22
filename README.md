@@ -1,29 +1,40 @@
 # Busy Bathrooms
 
-The project has three main components: the Arduino, that reads and publishes sensor data, the server, which hosts the Mosquitto broker as well as a Python server (which serves the website), and the website.
+The project has three main components: the Arduino, that reads and publishes sensor data, the server, which hosts the Mosquitto broker, a mediator service and a Python server (which serves the website), and the website clients.
 
-The solution does not need  
-
-Python 3.8.10
-
-## Mosquitto broker
-
+If working properly, the project should not need any installations. However, the Python server serving the website is unstable and the website may need to be served locally; in this case Python 3.8.10 should be installed.
 
 ## Server
 
 The server is a DigitalOcean droplet with IP 165.22.31.23.
 
-## Website
+### Mosquitto broker
 
-The website is running on 165.22.31.23:8000.
+The Mosquitto broker is running on the droplet. It listens to port 8080 (used by website clients) and port 1883 (used by mediator and arduinos).
 
-The website can also be run locally. This is done by running
+### Mediator
 
-```python3 -m http.server 8000```
+A systemd service running on the droplet which handles the queue and saves the latest data from the sensors to send to newly opened clients.
 
-and
+If not running, can be ran locally in the test folder:
 
 ```python3 mediator.py```
+
+This requires installing paho-mqtt through
+
+```pip instal paho-mqtt```
+
+### Python server
+
+A systemd service running on the droplet which serves the website at port 8000. However, not very stable; see next section.
+
+## Website
+
+The website can be accessed through 165.22.31.23:8000.
+
+If the website cannot be accessed through this IP, the Python server service is most likely down. In this case, the website can also be run locally through running
+
+```python3 -m http.server 8000```
 
 in the website folder, and then accessing the website via localhost:8000.
 
@@ -43,4 +54,4 @@ and
 
 ```bash occupybathroom2.sh```
 
-respectively.
+respectively. These can be used to try out the queue functionality.
