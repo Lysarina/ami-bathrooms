@@ -22,10 +22,14 @@ function onConnect(){
     }
 
     // call for latest data; out: 1 signifies this comes from user
-    client.subscribe("getLatest")
-    msg = new Paho.MQTT.Message("{\"out\": 1}");
-    msg.destinationName = "getLatest";
-    client.send(msg)
+    try {
+        client.subscribe("getLatest")
+        msg = new Paho.MQTT.Message("{\"out\": 1}");
+        msg.destinationName = "getLatest";
+        client.send(msg)
+    } catch (error) {
+        console.log("Error sending request for latest data: " + error);
+    }
 }
 
 function onConnectionLost(responseObject){
@@ -146,21 +150,26 @@ function startDisconnect(){
 function publishQueueMessage() {
     if (!inQueue && (freeBathrooms.length == 0 || queueSize > 0)) {
         // publish json with user ID and waiting 1 (add user to queue)
-        msgJSON = "{" +
-            "\"userID\": \"" + userID + "\", " +
-            "\"waiting\": 1," +
-            "\"bathroomID\": 0" +
-        "}";
-        topic = "queue";
-        msg = new Paho.MQTT.Message(msgJSON);
-        msg.destinationName = topic;
-        client.send(msg);
-        console.log("Message to topic "+topic+" is sent");
+        try {
+            msgJSON = "{" +
+                "\"userID\": \"" + userID + "\", " +
+                "\"waiting\": 1," +
+                "\"bathroomID\": 0" +
+            "}";
+            topic = "queue";
+            msg = new Paho.MQTT.Message(msgJSON);
+            msg.destinationName = topic;
+            client.send(msg);
+            console.log("Message to topic "+topic+" is sent");
 
-        inQueue = true;
-        document.getElementById("cancelBtn").style.display = "inline";
-        document.getElementById("notifyMsg").innerHTML = "You will be notified when a bathroom is available. Do not refresh the page!";
-        if (queueSize > 0) document.getElementById("queueWarning").innerHTML = "There are people before you in the queue.";
+            inQueue = true;
+            document.getElementById("cancelBtn").style.display = "inline";
+            document.getElementById("notifyMsg").innerHTML = "You will be notified when a bathroom is available. Do not refresh the page!";
+            if (queueSize > 0) document.getElementById("queueWarning").innerHTML = "There are people before you in the queue.";
+        } catch (error) {
+            console.log("Error adding user to queue: " + error);
+            document.getElementById("queueWarning").innerHTML = "Error adding user to queue. Please try again."
+        }
     } else if (!inQueue && freeBathrooms.length > 0) {
         // if there are free bathrooms, direct user
         alert("There are free bathrooms: " + freeBathrooms.toString());
@@ -172,22 +181,27 @@ function publishQueueMessage() {
 function publishCancelMessage() {
     if (inQueue) { 
         // publish json with user ID and waiting 2 (remove user from queue)
-        msgJSON = "{" +
-            "\"userID\": \"" + userID + "\", " +
-            "\"waiting\": 2," +
-            "\"bathroomID\": 0" +
-        "}";
-        topic = "queue";
-        msg = new Paho.MQTT.Message(msgJSON);
-        msg.destinationName = topic;
-        client.send(msg);
-        console.log("Message to topic " + topic + " is sent");
-        
-        document.getElementById("cancelBtn").style.display = "none";
-        document.getElementById("notifyMsg").innerHTML = "";
-        document.getElementById("queueWarning").innerHTML = "";
-        document.getElementById("alreadyInQueue").innerHTML = "";
+        try {
+            msgJSON = "{" +
+                "\"userID\": \"" + userID + "\", " +
+                "\"waiting\": 2," +
+                "\"bathroomID\": 0" +
+            "}";
+            topic = "queue";
+            msg = new Paho.MQTT.Message(msgJSON);
+            msg.destinationName = topic;
+            client.send(msg);
+            console.log("Message to topic " + topic + " is sent");
+            
+            document.getElementById("cancelBtn").style.display = "none";
+            document.getElementById("notifyMsg").innerHTML = "";
+            document.getElementById("queueWarning").innerHTML = "";
+            document.getElementById("alreadyInQueue").innerHTML = "";
         inQueue = false;
+        } catch (error) {
+            console.log("Error removing user from queue: " + error);
+            document.getElementById("queueWarning").innerHTML = "Error removing user from queue. Please try again."
+        }
     }
 }
 
