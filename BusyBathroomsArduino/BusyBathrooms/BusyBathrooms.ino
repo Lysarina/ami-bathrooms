@@ -54,6 +54,7 @@ uint32_t colorGreen = carrier.leds.Color(0, 200, 0);
 uint32_t colorBlue = carrier.leds.Color(0, 0, 200);
 uint32_t colorNone = carrier.leds.Color(0, 0, 0);
 int timeSinceMotion = 0;
+int tempAdjust = 0; // Sometimes the temperature just keeps rising, probably due to heating of the arduino...
 
 // MUSIC
 int noteDurations[] = {
