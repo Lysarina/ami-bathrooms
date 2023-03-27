@@ -1,12 +1,20 @@
 # Busy Bathrooms
 
-The project has three main components: the Arduino, that reads and publishes sensor data, the server, which hosts the Mosquitto broker, a mediator service and a Python server (which serves the website), and the website clients.
+The project has three main components: the Arduino, which reads and publishes sensor data and displays queue size information to the bathroom user, the server, which hosts the Mosquitto broker, a mediator service and a Python server (which serves the website), and the website clients.
 
 If working properly, the project should not need any installations. However, the Python server serving the website is unstable and the website may need to be served locally; in this case Python 3.8.10 should be installed.
 
+## Arduino
+
+The hardware consists of an MKR IoT Carrier (version 1) with luminance, temperature and humidity sensors (amongst others which were not used) for environment readings, a buzzer for catching the attention when there's a long queue (>5) for the bathroom, five LEDs displaying the number of people currently in the queue, and a passive infrared (PIR) sensor for detecting if bathroom is in use or not. A MKR Wif1010 board is connected to the IoT carrier, enabling the board to communicate over wifi. 
+
+The Arduino needs to connect to the internet. To do this, modify the "SECRET_SSID_WIFI" and "SECRET_PASS_WIFI" in the arduino_secrets.h file. A username and password for data transmission to the MQTT broker has been kept in the file since the application is for educational purposes and the data transmitted on the topics are not considered sensitive. 
+
+There should be one arduino-device (as described above) deployed in each bathroom of the application. These will all communicate over the same topics to the broker. This is why in the code of each arduino there will be set a bathroom id. There are also the two settable parameteres: motionStillAllowance, specifying the time [ms] the sensor should detect no movement until it should deem the bathroom free, and silentMode, quieting the buzzer.
+
 ## Server
 
-The server is a DigitalOcean droplet with IP 165.22.31.23.
+The server is a DigitalOcean droplet with IP address 165.22.31.23.
 
 ### Mosquitto broker
 

@@ -12,6 +12,10 @@
 #include "pitches.h"
 MKRIoTCarrier carrier;
 
+// Settable variables
+int motionStillAllowance = 20000; //milliseconds of no motion before it is reported
+int silentMode = 1; // 1 is silent, 0 is noisy
+
 // SET BATHROOM ID
 int bathroomID = 1;
 
@@ -22,7 +26,7 @@ WiFiClient wifiClient;
 MqttClient mqttClient(wifiClient);
 const char broker[] = "165.22.31.23";
 int port = 1883;
-const char topicOccupation[] = "occupation";
+const char topicOccupation[] = "occupancy";
 const char topicTemp[] = "sensors/temperature";
 const char topicHumi[] = "sensors/humidity";
 const char topicLight[] = "sensors/light";
@@ -37,7 +41,6 @@ int pirPin = A5;
 int state = LOW;  // we start with assuming no motion detected
 int pirVal = 0;   // variable for reading the pin status
 int calibrationTime = 30;
-int motionStillAllowance = 10000;
 
 // VARIABLE DECLARATIONS
 int light = 0;
@@ -50,8 +53,6 @@ uint32_t colorRed = carrier.leds.Color(200, 0, 0);
 uint32_t colorGreen = carrier.leds.Color(0, 200, 0);
 uint32_t colorBlue = carrier.leds.Color(0, 0, 200);
 uint32_t colorNone = carrier.leds.Color(0, 0, 0);
-int nInQueue = 0;
-int prevNInQueue = 0;
 int timeSinceMotion = 0;
 
 // MUSIC
@@ -80,8 +81,15 @@ void setup() {
   pinMode(pirPin, INPUT);
   Serial.begin(9600);
   while (!Serial);
+  CARRIER_CASE = true;
   carrier.begin();
   Serial.println("==========================================");
+  if(silentMode){
+    Serial.println("Application is in silent mode");
+  }
+  else{
+    Serial.println("Application is NOT in silent mode");
+  }
   // calibrateSensor();
   wifiConnect();
   mqttConnect();
@@ -102,10 +110,9 @@ void loop() {
     carrier.Light.readColor(none, none, none, light);
   }
   pirVal = digitalRead(pirPin);
-  temp = carrier.Env.readTemperature();  //reads temperature
+  temp = carrier.Env.readTemperature() - tempAdjust;  //reads temperature
   humi = carrier.Env.readHumidity();     //reads humidity
   humi = carrier.Env.readHumidity();     //reads airQuality
-  
   if (abs(temp - tempPrev) >= 0.5) {
     tempPrev = temp;
     pubSensorData(temp, topicTemp, "temperature");
@@ -116,7 +123,7 @@ void loop() {
     pubSensorData(humi, topicHumi, "humidity");
     display_temp_humidity(temp, humi);
   }
-  if (abs(light - lightPrev) >= 100 || lightPrev == 0 & light != 0) {
+  if (abs(light - lightPrev) >= 50 || lightPrev == 0 & light != 0) {
     lightPrev = light;
     pubSensorData(light, topicLight, "light");
   }
@@ -171,7 +178,7 @@ void pubSensorData(int data, const char topic[], const char sensor[]) {
 void pubOccupiedStatus(int occupied){
   // 0 = free, 1 = occupied
   doc["bathroomID"] = bathroomID;
-  doc["occupied"] = occupied;
+  doc["occupancy"] = occupied;
   char out[128];
   serializeJson(doc, out);
   mqttClient.beginMessage(topicOccupation);
@@ -184,30 +191,41 @@ void pubOccupiedStatus(int occupied){
 void updateQueueSize(int n) {
   if (n > 4) {
     n = 5;
-    carrier.Buzzer.sound(200);
+    if(!silentMode){
+      carrier.Buzzer.sound(200);
+    }
     carrier.leds.fill(colorRed, 0, 5);
     carrier.leds.show();
     delay(500);
     carrier.leds.fill(colorBlue, 0, 5);
     carrier.leds.show();
     delay(500);
-    carrier.Buzzer.noSound();
+    if(!silentMode){
+      carrier.Buzzer.noSound();
+    }
   }
-  // Flash with lights
-  carrier.leds.fill(colorRed, 0, n);
-  carrier.leds.show();
-  delay(500);
-  carrier.leds.fill(colorGreen, 0, n);
-  carrier.leds.show();
-  delay(500);
-  carrier.leds.fill(colorRed, 0, n);
-  carrier.leds.show();
-  delay(500);
-  carrier.leds.fill(colorGreen, 0, n);
-  carrier.leds.show();
-  delay(500);
-  carrier.leds.fill(colorRed, 0, n);
-  carrier.leds.show();
+  if(n == 0){
+    bathroomReset();
+  }
+  else{
+    // Flash with lights
+    carrier.leds.fill(colorRed, 0, 5);
+    carrier.leds.show();
+    delay(500);
+    carrier.leds.fill(colorGreen, 0, 5);
+    carrier.leds.show();
+    delay(500);
+    carrier.leds.fill(colorRed, 0, 5);
+    carrier.leds.show();
+    delay(500);
+    carrier.leds.fill(colorGreen, 0, 5);
+    carrier.leds.show();
+    delay(500);
+    carrier.leds.fill(colorNone, 0, 5);
+    carrier.leds.show();
+    carrier.leds.fill(colorRed, 0, n);
+    carrier.leds.show();
+  }
 }
 
 void wifiConnect() {
@@ -241,9 +259,11 @@ void motionDetection(int pirVal) {
       Serial.println("MOTION DETECTED!!--------------------------------");
       delay(50);
       pubOccupiedStatus(1);
-      carrier.Buzzer.sound(100);
-      delay(1000);
-      carrier.Buzzer.noSound();
+      if(!silentMode){
+        carrier.Buzzer.sound(100);
+        delay(1000);
+        carrier.Buzzer.noSound();
+      }
       state = HIGH;  // For the next time instant, motion has already been detected
     }
   } else {                // There is no motion
@@ -256,9 +276,11 @@ void motionDetection(int pirVal) {
         Serial.println("MOTION ENDED!------------------------------------");
         delay(50);
         pubOccupiedStatus(0);
-        carrier.Buzzer.sound(200);
-        delay(2000);
-        carrier.Buzzer.noSound();
+        if(!silentMode){
+          carrier.Buzzer.sound(100);
+          delay(2000);
+          carrier.Buzzer.noSound();
+        }
         state = LOW;
         timeSinceMotion = 0;
       }
@@ -269,28 +291,23 @@ void motionDetection(int pirVal) {
 void onMqttMessage(int messageSize) {
   char readChar;
   int readInt = 0;
-  // we received a message, print out the topic and contents
-  Serial.print("Received a message with topic '");
-  Serial.print(mqttClient.messageTopic());
-  // if topIC IS QUEUE...
+  // In the proposed solution we only subscribe to the queue-size topic...
+  // So the if serves as an extra check.
   if(mqttClient.messageTopic() == topicQueueSize){
     while (mqttClient.available()) {
       readChar = ((char)mqttClient.read());
-      Serial.print("readChar: ");
-      Serial.println(readChar);
       readInt = readChar - '0';  // convert char to int
-      Serial.print("readInt: ");
-      Serial.println(readInt);
     }
     updateQueueSize(readInt);
   }
 }
 
 void bathroomReset() {
-  nInQueue = 0;
   for (int thisNote = 0; thisNote < 8; thisNote++) {
     int noteDuration = 1000 / noteDurations[thisNote];
-    carrier.Buzzer.sound(finalMelody[thisNote]);
+    if(!silentMode){
+      carrier.Buzzer.sound(finalMelody[thisNote]);
+    }
     carrier.leds.fill(colorBlue, 0, 5);
     carrier.leds.show();
     delay(noteDuration / 3);
@@ -304,8 +321,12 @@ void bathroomReset() {
     carrier.leds.show();
     delay(pauseBetweenNotes);
     carrier.leds.show();
-    carrier.Buzzer.noSound();
+    if(!silentMode){
+      carrier.Buzzer.noSound();
+    }
   }
+  carrier.leds.fill(colorNone, 0, 5);
+  carrier.leds.show();
   carrier.leds.fill(colorGreen, 2, 1);
   carrier.leds.show();
 }
